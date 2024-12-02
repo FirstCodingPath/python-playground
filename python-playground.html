@@ -2,175 +2,159 @@
 <html>
 <head>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/ace.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/theme-monokai.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/mode-python.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pyodide/0.24.1/pyodide.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f0f8ff;
-            margin: 0;
-            padding: 20px;
-        }
-        h3 {
-            color: #333;
-            margin: 0 0 10px;
-        }
-        label {
-            font-weight: bold;
-        }
-        select {
-            font-size: 16px;
-            padding: 5px;
-        }
-        button {
-            padding: 10px 20px;
-            font-size: 16px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            margin-top: 10px;
-        }
-        button:disabled {
-            background-color: #cccccc;
-        }
-        button:hover:not(:disabled) {
-            background-color: #45a049;
-        }
-        #editor, #output {
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            font-size: 16px;
-        }
-        #editor {
-            height: 300px;
-        }
-        #output {
-            height: 300px;
-            background-color: #f9f9f9;
-            overflow-y: auto;
-            padding: 10px;
-            font-family: monospace;
-        }
-    </style>
 </head>
 <body>
-    <div style="max-width: 900px; margin: auto;">
-        <div id="loadingStatus" style="background: #fff3cd; color: #856404; padding: 15px; margin-bottom: 15px; border-radius: 4px; display: none;">
+    <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto;">
+        <div id="loadingStatus" style="background: #fff3cd; color: #856404; padding: 10px; margin-bottom: 10px; border-radius: 4px; display: none;">
             Loading Python environment... This may take a few moments.
         </div>
-
-        <!-- Dropdown for Example Questions -->
-        <div style="margin-bottom: 15px;">
-            <label for="exampleSelector">Choose a basic example: </label>
-            <select id="exampleSelector" onchange="loadExample()" style="padding: 5px; font-size: 16px;">
-                <option value="">-- Select a question --</option>
-                <option value="example1">1. Print your name</option>
-                <option value="example2">2. Add two numbers</option>
-                <option value="example3">3. Print numbers from 1 to 5</option>
-            </select>
-        </div>
-
         <div style="display: flex; gap: 20px; margin-bottom: 20px;">
             <div style="flex: 1;">
-                <h3>Python Code</h3>
-                <div id="editor"></div>
+                <h3 style="margin: 0 0 10px 0;">Python Code</h3>
+                <div id="editor" style="height: 300px; border: 1px solid #ccc; border-radius: 4px;"></div>
             </div>
             <div style="flex: 1;">
-                <h3>Output</h3>
-                <div id="output">
+                <h3 style="margin: 0 0 10px 0;">Output</h3>
+                <div id="output" style="height: 300px; background: #f5f5f5; padding: 10px; border: 1px solid #ccc; border-radius: 4px; overflow-y: auto; font-family: monospace; position: relative;">
                     <div id="outputContent"></div>
+                    <div id="inputArea" style="display: none; position: absolute; bottom: 0; left: 0; right: 0; padding: 10px; background: #fff; border-top: 1px solid #ccc;">
+                        <input type="text" id="inputField" style="width: 70%; padding: 5px; margin-right: 10px;">
+                        <button onclick="submitInput()" style="padding: 5px 10px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Submit</button>
+                    </div>
                 </div>
             </div>
         </div>
-
-        <div style="text-align: center;">
-            <button onclick="runPython()" id="runButton" disabled>Run Code</button>
-        </div>
+        <button onclick="runPython()" id="runButton" style="background: #4CAF50; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;" disabled>Run Code</button>
+        <select id="examples" onchange="loadExample()" style="margin-left: 10px; padding: 10px; border-radius: 4px;">
+            <option value="">Select an example</option>
+            <option value="hello">Hello World</option>
+            <option value="input">Input Example</option>
+            <option value="math">Math Practice</option>
+        </select>
     </div>
 
     <script>
         let editor = ace.edit("editor");
         editor.setTheme("ace/theme/monokai");
         editor.session.setMode("ace/mode/python");
-        editor.setValue(`# Select an example from the dropdown to load a basic Python script.`);
+        editor.setValue("# Write your Python code here\nprint('Hello, World!')");
 
         let pyodide;
-
+        let loadingStatus = document.getElementById('loadingStatus');
+        let runButton = document.getElementById('runButton');
+        let inputResolver = null;
+        
         async function initPyodide() {
-            const loadingStatus = document.getElementById('loadingStatus');
-            loadingStatus.style.display = 'block';
-            loadingStatus.innerText = 'Loading Python environment...';
-
             try {
-                pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.24.1/full/" });
+                loadingStatus.style.display = 'block';
+                loadingStatus.innerText = 'Loading Python environment...';
+                document.getElementById('outputContent').innerText = 'Initializing Python environment...';
+                
+                pyodide = await loadPyodide({
+                    indexURL: "https://cdn.jsdelivr.net/pyodide/v0.24.1/full/"
+                });
+                
+                // Define custom input function in Python
                 await pyodide.runPythonAsync(`
                     import sys
-                    import io
-                    sys.stdout = io.StringIO()  # Capture Python's print output
+                    from js import window
+                    def input(prompt=""):
+                        return window.pyInput(prompt)
                 `);
-                document.getElementById('runButton').disabled = false;
+                
+                runButton.disabled = false;
                 loadingStatus.style.background = '#d4edda';
                 loadingStatus.style.color = '#155724';
                 loadingStatus.innerText = 'Python environment loaded successfully!';
+                setTimeout(() => loadingStatus.style.display = 'none', 3000);
+                
+                document.getElementById('outputContent').innerText = 'Ready to run code!';
             } catch (error) {
                 loadingStatus.style.background = '#f8d7da';
                 loadingStatus.style.color = '#721c24';
-                loadingStatus.innerText = `Error loading Python: ${error.message}`;
-            } finally {
-                setTimeout(() => loadingStatus.style.display = 'none', 3000);
+                loadingStatus.innerText = 'Error loading Python: ' + error.message;
+                document.getElementById('outputContent').innerText = 'Failed to load Python environment. Please refresh the page to try again.';
             }
         }
+
         initPyodide();
+
+        // Custom input handling
+        window.pyInput = async function(prompt) {
+            document.getElementById('outputContent').innerText += prompt;
+            document.getElementById('inputArea').style.display = 'block';
+            document.getElementById('inputField').focus();
+            
+            return new Promise((resolve) => {
+                inputResolver = resolve;
+            });
+        }
+
+        function submitInput() {
+            const value = document.getElementById('inputField').value;
+            document.getElementById('outputContent').innerText += value + '\n';
+            document.getElementById('inputField').value = '';
+            document.getElementById('inputArea').style.display = 'none';
+            if (inputResolver) {
+                inputResolver(value);
+                inputResolver = null;
+            }
+        }
+
+        // Add Enter key support for input
+        document.getElementById('inputField').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                submitInput();
+            }
+        });
 
         async function runPython() {
             if (!pyodide) {
-                document.getElementById("outputContent").innerText = "Python environment is not ready. Please wait...";
+                document.getElementById('outputContent').innerText = "Python environment is not ready. Please wait...";
                 return;
             }
-
+            
             const code = editor.getValue();
-            const outputContent = document.getElementById("outputContent");
-            outputContent.innerText = ""; // Clear previous output
-
+            document.getElementById('outputContent').innerText = '';
+            document.getElementById('inputArea').style.display = 'none';
+            
             try {
-                await pyodide.runPythonAsync(`
+                pyodide.runPython(`
                     import sys
                     import io
-                    sys.stdout = io.StringIO()  # Reinitialize stdout
+                    sys.stdout = io.StringIO()
                 `);
-
+                
                 await pyodide.runPythonAsync(code);
-
+                
                 const stdout = pyodide.runPython("sys.stdout.getvalue()");
-                outputContent.innerText += stdout;
+                document.getElementById('outputContent').innerText += stdout;
             } catch (error) {
-                outputContent.innerText += `Error: ${error.message}`;
+                document.getElementById('outputContent').innerText += `Error: ${error.message}`;
             }
         }
 
+        const examples = {
+            hello: `print("Hello, World!")`,
+            
+            input: `name = input("What is your name? ")
+age = input("What is your age? ")
+print(f"Hello {name}, you are {age} years old!")`,
+            
+            math: `num1 = int(input("Enter first number: "))
+num2 = int(input("Enter second number: "))
+sum = num1 + num2
+print(f"The sum of {num1} and {num2} is {sum}")`,
+        };
+
         function loadExample() {
-            const examples = {
-                "example1": `# Print your name
-name = "Alice"
-print(f"My name is {name}")`,
-                "example2": `# Add two numbers
-a = 5
-b = 3
-sum = a + b
-print(f"The sum of {a} and {b} is {sum}")`,
-                "example3": `# Print numbers from 1 to 5
-for i in range(1, 6):
-    print(i)`
-            };
-
-            const exampleSelector = document.getElementById("exampleSelector");
-            const selectedValue = exampleSelector.value;
-
-            if (selectedValue && examples[selectedValue]) {
-                editor.setValue(examples[selectedValue]);
-            } else {
-                editor.setValue(`# Select an example from the dropdown to load a basic Python script.`);
+            const selected = document.getElementById('examples').value;
+            if (selected && examples[selected]) {
+                editor.setValue(examples[selected]);
+                editor.clearSelection();
             }
         }
     </script>
