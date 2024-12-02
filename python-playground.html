@@ -18,118 +18,136 @@
             </div>
             <div style="flex: 1;">
                 <h3 style="margin: 0 0 10px 0;">Output</h3>
-                <div id="output" style="height: 300px; background: #f5f5f5; padding: 10px; border: 1px solid #ccc; border-radius: 4px; overflow-y: auto; font-family: monospace;"></div>
+                <div id="output" style="height: 300px; background: #f5f5f5; padding: 10px; border: 1px solid #ccc; border-radius: 4px; overflow-y: auto; font-family: monospace; position: relative;">
+                    <div id="outputContent"></div>
+                    <div id="inputArea" style="display: none; position: absolute; bottom: 0; left: 0; right: 0; padding: 10px; background: #fff; border-top: 1px solid #ccc;">
+                        <input type="text" id="inputField" style="width: 70%; padding: 5px; margin-right: 10px;">
+                        <button onclick="submitInput()" style="padding: 5px 10px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Submit</button>
+                    </div>
+                </div>
             </div>
         </div>
         <button onclick="runPython()" id="runButton" style="background: #4CAF50; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;" disabled>Run Code</button>
         <select id="examples" onchange="loadExample()" style="margin-left: 10px; padding: 10px; border-radius: 4px;">
             <option value="">Select an example</option>
             <option value="hello">Hello World</option>
-            <option value="turtle">Draw with Turtle</option>
+            <option value="input">Input Example</option>
             <option value="math">Math Practice</option>
         </select>
     </div>
 
     <script>
-        // Initialize Ace editor
         let editor = ace.edit("editor");
         editor.setTheme("ace/theme/monokai");
         editor.session.setMode("ace/mode/python");
         editor.setValue("# Write your Python code here\nprint('Hello, World!')");
 
-        // Initialize Pyodide with better status handling
         let pyodide;
         let loadingStatus = document.getElementById('loadingStatus');
         let runButton = document.getElementById('runButton');
+        let inputResolver = null;
         
         async function initPyodide() {
             try {
                 loadingStatus.style.display = 'block';
-                loadingStatus.innerText = 'Loading Python environment... This may take a few moments.';
-                document.getElementById('output').innerText = 'Initializing Python environment...';
+                loadingStatus.innerText = 'Loading Python environment...';
+                document.getElementById('outputContent').innerText = 'Initializing Python environment...';
                 
                 pyodide = await loadPyodide({
-                    indexURL: "https://cdn.jsdelivr.net/pyodide/v0.24.1/full/",
-                    stdout: (text) => {
-                        document.getElementById('output').innerText += text + '\n';
-                    },
-                    stderr: (text) => {
-                        document.getElementById('output').innerText += 'Error: ' + text + '\n';
-                    }
+                    indexURL: "https://cdn.jsdelivr.net/pyodide/v0.24.1/full/"
                 });
+                
+                // Define custom input function in Python
+                await pyodide.runPythonAsync(`
+                    import sys
+                    from js import window
+                    def input(prompt=""):
+                        return window.pyInput(prompt)
+                `);
                 
                 runButton.disabled = false;
                 loadingStatus.style.background = '#d4edda';
                 loadingStatus.style.color = '#155724';
                 loadingStatus.innerText = 'Python environment loaded successfully!';
-                setTimeout(() => {
-                    loadingStatus.style.display = 'none';
-                }, 3000);
+                setTimeout(() => loadingStatus.style.display = 'none', 3000);
                 
-                document.getElementById('output').innerText = 'Ready to run code!';
+                document.getElementById('outputContent').innerText = 'Ready to run code!';
             } catch (error) {
                 loadingStatus.style.background = '#f8d7da';
                 loadingStatus.style.color = '#721c24';
                 loadingStatus.innerText = 'Error loading Python: ' + error.message;
-                document.getElementById('output').innerText = 'Failed to load Python environment. Please refresh the page to try again.';
+                document.getElementById('outputContent').innerText = 'Failed to load Python environment. Please refresh the page to try again.';
             }
         }
 
-        // Start loading Pyodide immediately
         initPyodide();
 
-        // Run Python code with better error handling
+        // Custom input handling
+        window.pyInput = async function(prompt) {
+            document.getElementById('outputContent').innerText += prompt;
+            document.getElementById('inputArea').style.display = 'block';
+            document.getElementById('inputField').focus();
+            
+            return new Promise((resolve) => {
+                inputResolver = resolve;
+            });
+        }
+
+        function submitInput() {
+            const value = document.getElementById('inputField').value;
+            document.getElementById('outputContent').innerText += value + '\n';
+            document.getElementById('inputField').value = '';
+            document.getElementById('inputArea').style.display = 'none';
+            if (inputResolver) {
+                inputResolver(value);
+                inputResolver = null;
+            }
+        }
+
+        // Add Enter key support for input
+        document.getElementById('inputField').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                submitInput();
+            }
+        });
+
         async function runPython() {
             if (!pyodide) {
-                document.getElementById('output').innerText = "Python environment is not ready. Please wait...";
+                document.getElementById('outputContent').innerText = "Python environment is not ready. Please wait...";
                 return;
             }
             
             const code = editor.getValue();
-            document.getElementById('output').innerText = "Running...\n";
+            document.getElementById('outputContent').innerText = '';
+            document.getElementById('inputArea').style.display = 'none';
             
             try {
-                await pyodide.loadPackagesFromImports(code);
-                const output = await pyodide.runPythonAsync(code);
-                if (output !== undefined) {
-                    document.getElementById('output').innerText += output;
-                }
+                pyodide.runPython(`
+                    import sys
+                    import io
+                    sys.stdout = io.StringIO()
+                `);
+                
+                await pyodide.runPythonAsync(code);
+                
+                const stdout = pyodide.runPython("sys.stdout.getvalue()");
+                document.getElementById('outputContent').innerText += stdout;
             } catch (error) {
-                document.getElementById('output').innerText += `Error: ${error.message}`;
+                document.getElementById('outputContent').innerText += `Error: ${error.message}`;
             }
         }
 
-        // Example code snippets
         const examples = {
-            hello: `# Simple Hello World program
-print("Hello, Python learner!")
-name = input("What's your name? ")
-print(f"Nice to meet you, {name}!")`,
+            hello: `print("Hello, World!")`,
             
-            turtle: `# Draw a colorful star
-import turtle
-
-t = turtle.Turtle()
-t.speed(3)
-
-for _ in range(5):
-    t.forward(100)
-    t.right(144)
-    t.color('red')`,
+            input: `name = input("What is your name? ")
+age = input("What is your age? ")
+print(f"Hello {name}, you are {age} years old!")`,
             
-            math: `# Math practice game
-import random
-
-num1 = random.randint(1, 10)
-num2 = random.randint(1, 10)
-
-print(f"What is {num1} + {num2}?")
-answer = int(input("Your answer: "))
-
-if answer == num1 + num2:
-    print("Correct! Well done!")
-else:
-    print(f"Not quite. The answer is {num1 + num2}")`,
+            math: `num1 = int(input("Enter first number: "))
+num2 = int(input("Enter second number: "))
+sum = num1 + num2
+print(f"The sum of {num1} and {num2} is {sum}")`,
         };
 
         function loadExample() {
