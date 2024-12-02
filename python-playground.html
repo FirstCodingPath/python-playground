@@ -32,7 +32,7 @@
         let editor = ace.edit("editor");
         editor.setTheme("ace/theme/monokai");
         editor.session.setMode("ace/mode/python");
-        editor.setValue(`# Write your Python code here\nname = input("What is your name? ")\nprint(f"Hello, {name}!")`);
+        editor.setValue(`# Write your Python code here\nname = input("What is your name? ")\nage = input("How old are you? ")\nprint(f"{name} is {age} years old.")`);
 
         let pyodide;
         let inputResolver = null;
@@ -49,8 +49,8 @@
                     from js import window
 
                     def input(prompt=""):
-                        print(prompt, end="")  # Display the prompt inline
-                        return window.pyInput(prompt)
+                        print(prompt, end="")
+                        return window.pyInput(prompt).to_py()
                 `);
                 document.getElementById('runButton').disabled = false;
                 loadingStatus.style.background = '#d4edda';
@@ -67,28 +67,36 @@
         initPyodide();
 
         window.pyInput = function (prompt) {
-            const outputContent = document.getElementById('outputContent');
-            const inputArea = document.getElementById('inputArea');
-            const inputField = document.getElementById('inputField');
+            const outputContent = document.getElementById("outputContent");
+            const inputArea = document.getElementById("inputArea");
+            const inputField = document.getElementById("inputField");
 
-            outputContent.innerText += prompt + '\n';
-            inputArea.style.display = 'block';
+            outputContent.innerText += prompt + "\n";
+            inputArea.style.display = "block";
             inputField.focus();
 
             return new Promise((resolve) => {
-                inputResolver = resolve;
+                inputField.onkeydown = (event) => {
+                    if (event.key === "Enter") {
+                        const userInput = inputField.value;
+                        inputField.value = ""; // Clear the input field
+                        inputArea.style.display = "none"; // Hide input area
+                        outputContent.innerText += `${userInput}\n`; // Display input in output
+                        resolve(userInput); // Resolve the input back to Python
+                    }
+                };
             });
         };
 
         function submitInput() {
-            const inputField = document.getElementById('inputField');
-            const outputContent = document.getElementById('outputContent');
-            const inputArea = document.getElementById('inputArea');
+            const inputField = document.getElementById("inputField");
+            const outputContent = document.getElementById("outputContent");
+            const inputArea = document.getElementById("inputArea");
 
             const value = inputField.value;
-            outputContent.innerText += value + '\n'; // Append input value to output
-            inputField.value = ''; // Clear input field
-            inputArea.style.display = 'none'; // Hide input area
+            outputContent.innerText += `${value}\n`; // Append input value to output
+            inputField.value = ""; // Clear input field
+            inputArea.style.display = "none"; // Hide input area
 
             if (inputResolver) {
                 inputResolver(value); // Pass input back to Python
@@ -98,13 +106,13 @@
 
         async function runPython() {
             if (!pyodide) {
-                document.getElementById('outputContent').innerText = "Python environment is not ready. Please wait...";
+                document.getElementById("outputContent").innerText = "Python environment is not ready. Please wait...";
                 return;
             }
 
             const code = editor.getValue();
-            const outputContent = document.getElementById('outputContent');
-            outputContent.innerText = ''; // Clear previous output
+            const outputContent = document.getElementById("outputContent");
+            outputContent.innerText = ""; // Clear previous output
 
             try {
                 await pyodide.runPythonAsync(`
