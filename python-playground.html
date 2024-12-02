@@ -2,7 +2,7 @@
 <html>
 <head>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/ace.js"></script>
-    <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pyodide/0.24.1/pyodide.js"></script>
 </head>
 <body>
     <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto;">
@@ -49,7 +49,7 @@
                     from js import window
 
                     def input(prompt=""):
-                        print(prompt, end="")  # Display prompt inline
+                        print(prompt, end="")  # Display the prompt inline
                         return window.pyInput(prompt)
                 `);
                 document.getElementById('runButton').disabled = false;
@@ -71,7 +71,7 @@
             const inputArea = document.getElementById('inputArea');
             const inputField = document.getElementById('inputField');
 
-            outputContent.innerText += prompt;
+            outputContent.innerText += prompt + '\n';
             inputArea.style.display = 'block';
             inputField.focus();
 
@@ -91,7 +91,7 @@
             inputArea.style.display = 'none'; // Hide input area
 
             if (inputResolver) {
-                inputResolver(value); // Resolve the promise with input value
+                inputResolver(value); // Pass input back to Python
                 inputResolver = null;
             }
         }
@@ -107,7 +107,7 @@
             outputContent.innerText = ''; // Clear previous output
 
             try {
-                pyodide.runPython(`
+                await pyodide.runPythonAsync(`
                     import sys
                     import io
                     sys.stdout = io.StringIO()
