@@ -90,7 +90,7 @@
                 </select>
                 <button onclick="toggleLayout()">Toggle Layout</button>
             </div>
-            <button id="runButton" onclick="runPython()" disabled>Run Code (Enter)</button>
+            <button id="runButton" onclick="runPython()" disabled>Run Code (Shift + Enter)</button>
         </div>
         <div class="main" id="mainLayout">
             <div class="editor" id="editor"></div>
@@ -119,7 +119,7 @@
                     sys.stdout = io.StringIO()  # Capture Python's print output
                 `);
                 runButton.disabled = false;
-                runButton.textContent = "Run Code (Enter)";
+                runButton.textContent = "Run Code (Shift + Enter)";
             } catch (error) {
                 runButton.textContent = "Error Loading Python";
                 console.error("Pyodide failed to load:", error);
@@ -165,9 +165,10 @@
             mainLayout.classList.toggle("vertical");
         }
 
-        // Allow Run Button to be Triggered by Enter Key
+        // Allow Run Button to be Triggered by Shift + Enter
         document.addEventListener("keydown", function (event) {
-            if (event.key === "Enter" && !document.getElementById("runButton").disabled) {
+            if (event.key === "Enter" && event.shiftKey && !document.getElementById("runButton").disabled) {
+                event.preventDefault(); // Prevent default behavior
                 runPython();
             }
         });
