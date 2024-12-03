@@ -165,11 +165,16 @@
             mainLayout.classList.toggle("vertical");
         }
 
-        // Allow Run Button to be Triggered by Shift + Enter
+        // Allow Run Button to be Triggered by Shift + Enter and Move Cursor to Next Line
         document.addEventListener("keydown", function (event) {
             if (event.key === "Enter" && event.shiftKey && !document.getElementById("runButton").disabled) {
                 event.preventDefault(); // Prevent default behavior
                 runPython();
+
+                // Move cursor to the next line
+                const cursorPosition = editor.getCursorPosition();
+                editor.session.insert({ row: cursorPosition.row + 1, column: 0 }, "\n");
+                editor.moveCursorTo(cursorPosition.row + 1, 0);
             }
         });
     </script>
